@@ -1,12 +1,10 @@
 use crate::renderer::Renderer;
-use crate::keyboard::Keyboard;
 use std::fs::File;
 use std::io::prelude::*;
 
 pub struct Cpu {
     pub renderer: Renderer,
     pub memory: Vec<u8>,
-    pub keyboard: Keyboard,
     pub delay_timer: u8,
     pub v: Vec<u8>,
     pub i: u8,
@@ -17,21 +15,20 @@ pub struct Cpu {
 }
 
 impl Cpu {
-    pub fn new(renderer: Renderer, keyboard: Keyboard) -> Cpu {
+    pub fn new(renderer: Renderer) -> Cpu {
         let memory = vec![0; 4096];
         let v = vec![0; 16];
         let stack = Vec::new();
 
         return Cpu {
             renderer,
-            keyboard,
             memory,
             delay_timer: 60,
             v,
             i: 0x00,
             pc: 0x200,
             stack,
-            speed: 10,
+            speed: 1,
             paused: false,
         };
     }
@@ -56,8 +53,11 @@ impl Cpu {
             0xF0u8, 0x80u8, 0xF0u8, 0x80u8, 0x80u8, // F
         ];
 
+        let mut i = 0;
+
         for x in sprites.iter() {
-            self.memory.push(*x);
+            self.memory.insert(i, x.clone());
+            i = i + 1;
         }
     }
 
@@ -75,7 +75,7 @@ impl Cpu {
 
         self.load_sprites();
     }
-    
+
     pub fn update_timers(&mut self) {
         if self.delay_timer > 0 {
             self.delay_timer -= 1;
@@ -85,9 +85,10 @@ impl Cpu {
     pub fn cycle(&mut self) -> u8 {
         for _i in 0..self.speed {
             if !self.paused {
-                let opcode = (self.memory[self.pc as usize] as u16) << 8
-                    | self.memory[self.pc as usize + 1] as u16;
-                self.execute_instruction(opcode);
+                let higher = (self.memory[self.pc as usize] as u16) << 8;
+                let lower = self.memory[self.pc as usize + 1] as u16;
+
+                self.execute_instruction(higher + lower);
             }
         }
 
@@ -104,8 +105,6 @@ impl Cpu {
         let x = (opcode & 0x0F00) >> 8;
         let y = (opcode & 0x00F0) >> 4;
 
-        println!("Instruction: 0x{:02x}", opcode);
-
         match opcode & 0xF000 {
             0x0000 => match opcode {
                 0x00E0 => self.renderer.clear(),
@@ -118,12 +117,12 @@ impl Cpu {
                 }
             },
             0x1000 => {
-                self.pc = opcode  & 0xFF;
+                self.pc = opcode & 0xFFF;
             }
 
             0x2000 => {
                 self.stack.push(self.pc);
-                self.pc = opcode & 0xFF;
+                self.pc = opcode & 0xFFF;
             }
 
             0x3000 => {
@@ -139,7 +138,7 @@ impl Cpu {
             }
 
             0x5000 => {
-                if self.v[x as usize] ==  self.v[y as usize]{
+                if self.v[x as usize] == self.v[y as usize] {
                     self.pc += 2;
                 }
             }
@@ -173,7 +172,7 @@ impl Cpu {
                     let sum = self.v[x as usize] as u16 + self.v[y as usize] as u16;
 
                     if sum > 0xff {
-                        self.v[0xf] = 1;  
+                        self.v[0xf] = 1;
                     } else {
                         self.v[0xf] = 0;
                     }
@@ -239,7 +238,7 @@ impl Cpu {
             0xD000 => {
                 let width: u8 = 8;
                 let height: u8 = opcode as u8 & 0xf;
-            
+
                 self.v[0xF] = 0;
 
                 for row in 0..height {
@@ -247,13 +246,13 @@ impl Cpu {
                     let mut sprite = self.memory[index as usize];
 
                     for column in 0..width {
-                        if (sprite & 0x80) > 0 { 
+                        if (sprite & 0x80) > 0 {
                             let x_pos = self.v[x as usize] + column;
                             let y_pos = self.v[y as usize] + row;
                             if self.renderer.set_pixel(x_pos as isize, y_pos as isize) {
                                 self.v[0xF] = 1;
                             }
-                        } 
+                        }
 
                         sprite <<= 1;
                     }
@@ -262,15 +261,14 @@ impl Cpu {
 
             0xE000 => match opcode & 0xFF {
                 0x9E => {
-
                     //REVISAR
-                    if self.keyboard.is_key_pressed(self.v[x as usize]) > 0 {
+                    if self.renderer.keyboard.is_key_pressed(self.v[x as usize]) > 0 {
                         self.pc += 2;
                     }
                 }
 
                 0xA1 => {
-                    if self.keyboard.is_key_pressed(self.v[x as usize]) == 0 {
+                    if self.renderer.keyboard.is_key_pressed(self.v[x as usize]) == 0 {
                         self.pc += 2;
                     }
                 }
@@ -286,8 +284,6 @@ impl Cpu {
 
                 0x0A => {
                     self.paused = true;
-
-
                 }
 
                 0x15 => {
