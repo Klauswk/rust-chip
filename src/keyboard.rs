@@ -1,5 +1,22 @@
 use sdl2::keyboard::Keycode;
 
+pub struct Keyboard {
+
+}
+
+impl Keyboard {
+
+    pub fn new() -> Keyboard {
+        return Keyboard{};
+    }
+
+    pub fn is_key_pressed(&self, _keycode: u8) -> u8 {
+        return 0;
+    }
+
+
+}
+
 pub fn get_pressed(keycode: Keycode) -> u8 {
     match keycode {
         Keycode::Num1 =>  0x1,
