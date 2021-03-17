@@ -1,21 +1,36 @@
 use sdl2::keyboard::Keycode;
 
 pub struct Keyboard {
-    pub keys_pressed: Vec<u8>
+    pub keys_pressed: Vec<u8>,
+    pub last_key_pressed: u8,
 }
 
 impl Keyboard {
     pub fn new() -> Keyboard {
         return Keyboard {
             keys_pressed: Vec::new(),
+            last_key_pressed: 0,
         };
     }
 
-    pub fn is_key_pressed(&mut self, _keycode: u8) -> u8 {
-        if self.keys_pressed.len() > 0 {
-            return self.keys_pressed.pop().unwrap();
+    pub fn is_key_pressed(&mut self, keycode: u8) -> u8 {
+        let is_pressed = self.keys_pressed.iter().find(|&key| key == &keycode);
+
+        return *is_pressed.unwrap_or(&0);
+    }
+
+    pub fn on_key_down(&mut self, keycode: Keycode) {
+        let key = self.get_pressed(keycode);
+        self.keys_pressed.push(key);
+        self.last_key_pressed = key;
+    }
+
+    pub fn on_key_up(&mut self, keycode: Keycode) {
+        let key = self.get_pressed(keycode);
+        if let Some(pos) = self.keys_pressed.iter().position(|x| *x == key) {
+            self.keys_pressed.remove(pos);
         }
-        return 0;
+        self.last_key_pressed = 0;
     }
 
     pub fn get_pressed(&self, keycode: Keycode) -> u8 {

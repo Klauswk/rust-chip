@@ -68,8 +68,13 @@ impl Renderer {
                     keycode,
                     ..
                 } => {
-                    let key = self.keyboard.get_pressed(keycode.unwrap());
-                    self.keyboard.keys_pressed.push(key);
+                    self.keyboard.on_key_down(keycode.unwrap());
+                },
+                Event::KeyUp {
+                    keycode,
+                    ..
+                } => {
+                    self.keyboard.on_key_up(keycode.unwrap());
                 },
                 _ => {
                     return 0;
@@ -102,8 +107,7 @@ impl Renderer {
             // If the value at this.display[i] == 1, then draw a pixel.
 
             let t = i as usize;
-            if self.display[t] > 0 {
-    
+            if self.display[t] > 0 {    
                 // Place a pixel at position (x, y) with a width and height of scale
                 self.canvas.fill_rect(Rect::new(x.try_into().unwrap(), y.try_into().unwrap(), self.scale as u32, self.scale as u32)).unwrap();
             }

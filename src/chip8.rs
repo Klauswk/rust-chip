@@ -1,6 +1,5 @@
 use crate::cpu::Cpu;
 use std::{thread, time};
-
 pub struct Chip8 {
     pub cpu: Cpu,
 }
@@ -14,8 +13,8 @@ impl Chip8 {
     }
 
     pub fn run(&mut self) -> Result<(), String> {
-        let ten_millis = time::Duration::from_millis(30);
-        
+        let ten_millis = time::Duration::from_millis(100);
+
         'running: loop {
             if self.cpu.delay_timer > 0 {
                 self.cpu.delay_timer -= 1;
