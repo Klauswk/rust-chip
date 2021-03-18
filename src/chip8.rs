@@ -21,7 +21,7 @@ impl Chip8 {
             }
 
             let result = self.cpu.cycle();
-
+            
             if result > 0 {
                 break 'running;
             }

@@ -1,6 +1,4 @@
-use sdl2::Sdl;
-use sdl2::event::Event;
-use sdl2::keyboard::Keycode;
+use sdl2::{EventPump, Sdl};
 use sdl2::pixels::Color;
 use sdl2::rect::Rect;
 use std::convert::TryInto;
@@ -13,7 +11,8 @@ pub struct Renderer {
     pub keyboard: Keyboard,
     scale: isize,
     display: Vec<u32>,
-    sdl_context: Sdl,
+    pub sdl_context: Sdl,
+    pub event_pump: EventPump,
     canvas: sdl2::render::Canvas<sdl2::video::Window>,
 }
 
@@ -34,8 +33,15 @@ impl Renderer {
     
         let canvas = window.into_canvas().build().map_err(|e| e.to_string())?;
 
+        let mut event_pump = sdl_context.event_pump().unwrap();
+        event_pump.disable_event(sdl2::event::EventType::MouseMotion);
+        event_pump.disable_event(sdl2::event::EventType::MouseButtonUp);
+        event_pump.disable_event(sdl2::event::EventType::MouseButtonDown);
+        event_pump.disable_event(sdl2::event::EventType::MouseWheel);
+
         return Ok(Renderer {
             keyboard,
+            event_pump,
             scale,
             display,
             sdl_context,
@@ -48,53 +54,6 @@ impl Renderer {
         self.canvas.set_draw_color(Color::BLACK);
         self.canvas.clear();
         self.canvas.present();
-        let mut event_pump = self.sdl_context.event_pump().unwrap();
-    
-        for event in event_pump.poll_iter() {
-
-            match event {
-                Event::Quit {
-                    ..
-                } => {
-                    return 1;
-                },
-                Event::KeyDown {
-                    keycode: Some(Keycode::Escape),
-                    ..
-                } => {
-                    return 1;
-                },
-                Event::KeyDown {
-                    keycode,
-                    ..
-                } => {
-                    self.keyboard.on_key_down(keycode.unwrap());
-                },
-                Event::KeyUp {
-                    keycode,
-                    ..
-                } => {
-                    self.keyboard.on_key_up(keycode.unwrap());
-                },
-                _ => {
-                    return 0;
-                }
-            }
-
-            /*match event {
-                Event::Quit { .. }
-                | Event::KeyDown {
-                    keycode: Some(Keycode::Escape),
-                    ..
-                } => {
-                    return 1;
-                },
-                Event::KeyDown {
-                    ke
-                }
-            }*/
-        }
-
 
         for i in 0..ROWS*COLUMNS {
             // Grabs the x position of the pixel based off of `i`

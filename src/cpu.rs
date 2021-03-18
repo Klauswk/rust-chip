@@ -1,8 +1,9 @@
 use crate::renderer::Renderer;
-use std::fs::File;
+use sdl2::event::Event;
+use sdl2::keyboard::Keycode;
+use std::{borrow::BorrowMut, fs::File};
 use std::io;
 use std::io::prelude::*;
-use std::{thread, time};
 
 pub struct Cpu {
     pub renderer: Renderer,
@@ -37,23 +38,23 @@ impl Cpu {
 
     pub fn load_sprites(&mut self) {
         let sprites = [
-            0xF0u8, 0x90u8, 0x90u8, 0x90u8, 0xF0u8, // 0
-            0x20u8, 0x60u8, 0x20u8, 0x20u8, 0x70u8, // 1
-            0xF0u8, 0x10u8, 0xF0u8, 0x80u8, 0xF0u8, // 2
-            0xF0u8, 0x10u8, 0xF0u8, 0x10u8, 0xF0u8, // 3
-            0x90u8, 0x90u8, 0xF0u8, 0x10u8, 0x10u8, // 4
-            0xF0u8, 0x80u8, 0xF0u8, 0x10u8, 0xF0u8, // 5
-            0xF0u8, 0x80u8, 0xF0u8, 0x90u8, 0xF0u8, // 6
-            0xF0u8, 0x10u8, 0x20u8, 0x40u8, 0x40u8, // 7
-            0xF0u8, 0x90u8, 0xF0u8, 0x90u8, 0xF0u8, // 8
-            0xF0u8, 0x90u8, 0xF0u8, 0x10u8, 0xF0u8, // 9
-            0xF0u8, 0x90u8, 0xF0u8, 0x90u8, 0x90u8, // A
-            0xE0u8, 0x90u8, 0xE0u8, 0x90u8, 0xE0u8, // B
-            0xF0u8, 0x80u8, 0x80u8, 0x80u8, 0xF0u8, // C
-            0xE0u8, 0x90u8, 0x90u8, 0x90u8, 0xE0u8, // D
-            0xF0u8, 0x80u8, 0xF0u8, 0x80u8, 0xF0u8, // E
-            0xF0u8, 0x80u8, 0xF0u8, 0x80u8, 0x80u8, // F
-        ];
+            0xF0, 0x90, 0x90, 0x90, 0xF0, /* 0 */
+            0x20, 0x60, 0x20, 0x20, 0x70, /* 1 */
+            0xF0, 0x10, 0xF0, 0x80, 0xF0, /* 2 */
+            0xF0, 0x10, 0xF0, 0x10, 0xF0, /* 3 */
+            0x90, 0x90, 0xF0, 0x10, 0x10, /* 4 */
+            0xF0, 0x80, 0xF0, 0x10, 0xF0, /* 5 */
+            0xF0, 0x80, 0xF0, 0x90, 0xF0, /* 6 */
+            0xF0, 0x10, 0x20, 0x40, 0x40, /* 7 */
+            0xF0, 0x90, 0xF0, 0x90, 0xF0, /* 8 */
+            0xF0, 0x90, 0xF0, 0x10, 0xF0, /* 9 */
+            0xF0, 0x90, 0xF0, 0x90, 0x90, /* a */
+            0xE0, 0x90, 0xE0, 0x90, 0xE0, /* b */
+            0xF0, 0x80, 0x80, 0x80, 0xF0, /* c */
+            0xE0, 0x90, 0x90, 0x90, 0xE0, /* d */
+            0xF0, 0x80, 0xF0, 0x80, 0xF0, /* e */
+            0xF0, 0x80, 0xF0, 0x80, 0x80,
+        ]; // f
 
         let mut i = 0;
 
@@ -90,12 +91,35 @@ impl Cpu {
                 self.execute_instruction(higher + lower);
             }
         }
+        let event_pump = self.renderer.event_pump.borrow_mut();
+
+        for event in event_pump.poll_iter() {
+                match event {
+                    Event::Quit {..} |
+                    Event::KeyDown { keycode: Some(Keycode::Escape), .. } => {
+                       return 1;
+                    },
+                    ev => {
+                        match ev {
+                            Event::KeyDown { keycode, .. } => {
+                                self.renderer.keyboard.on_key_down(keycode.unwrap());
+                            },
+                            Event::KeyUp { keycode, .. } => {
+                                self.renderer.keyboard.on_key_up(keycode.unwrap());
+                            }
+                            _ => {
+                                return 0;
+                            }
+                        }
+                    }
+                }
+        }
 
         if !self.paused {
             self.update_timers();
         }
 
-        return self.renderer.render();
+        return 0;
     }
 
     fn get_type(&self, opcode: u16) -> &str {
@@ -193,19 +217,6 @@ impl Cpu {
                 _ => panic!("Instruction not know: {}", opcode),
             },
             0x1000 => {
-                if opcode == 0x130E {
-                    let mut stdin = io::stdin();
-                    let mut stdout = io::stdout();
-
-                    // We want the cursor to stay at the end of the line, so we print without a newline and flush manually.
-                    write!(stdout, "Press any key to continue...").unwrap();
-                    stdout.flush().unwrap();
-
-                    // Read a single byte and discard
-                    let _ = stdin.read(&mut [0u8]).unwrap();
-
-                    std::process::exit(0);
-                }
                 self.pc = opcode & 0xFFF;
             }
 
@@ -244,7 +255,7 @@ impl Cpu {
             }
 
             0x7000 => {
-                self.v[x as usize] = self.v[x as usize] + opcode as u8 & 0xFF;
+                self.v[x as usize] = self.v[x as usize].wrapping_add(opcode as u8 & 0xFF);
                 self.pc += 2;
             }
 
@@ -310,7 +321,7 @@ impl Cpu {
                         self.v[0xF] = 1;
                     }
 
-                    self.v[x as usize] = self.v[x as usize].wrapping_sub(self.v[y as usize]);
+                    self.v[y as usize] = self.v[y as usize].wrapping_sub(self.v[x as usize]);
                     self.pc += 2;
                 }
 
@@ -333,7 +344,7 @@ impl Cpu {
             }
 
             0xA000 => {
-                self.i = opcode & 0xFF;
+                self.i = opcode & 0xFFF;
                 self.pc += 2;
             }
 
@@ -350,10 +361,9 @@ impl Cpu {
             }
 
             0xD000 => {
-                println!("drawing");
                 let width: u8 = 8;
                 let height: u8 = opcode as u8 & 0xf;
-                
+
                 self.v[0xF] = 0;
 
                 for row in 0..height {
@@ -361,7 +371,8 @@ impl Cpu {
                     let mut sprite = self.memory[index as usize];
 
                     for column in 0..width {
-                        if (sprite & 0xF) > 0 {
+                        let msb = 1 << (8 - 1);
+                        if (sprite & msb) > 0 {
                             let x_pos = self.v[x as usize] + column;
                             let y_pos = self.v[y as usize] + row;
                             if self.renderer.set_pixel(x_pos as isize, y_pos as isize) {
@@ -372,6 +383,8 @@ impl Cpu {
                         sprite <<= 1;
                     }
                 }
+                self.renderer.render();
+
                 self.pc += 2;
             }
 
@@ -404,16 +417,11 @@ impl Cpu {
                 }
 
                 0x0A => {
-                    self.paused = true;
+                    if !self.renderer.keyboard.keys_pressed.is_empty() {
+                        self.v[x as usize] = self.renderer.keyboard.last_key_pressed;
 
-                    while self.renderer.keyboard.keys_pressed.is_empty() {
-                        let ten_millis = time::Duration::from_millis(100);
-                        thread::sleep(ten_millis);
+                        self.pc += 2;
                     }
-
-                    self.v[x as usize] = self.renderer.keyboard.last_key_pressed;
-
-                    self.pc += 2;
                 }
 
                 0x15 => {
@@ -433,7 +441,8 @@ impl Cpu {
                 }
 
                 0x29 => {
-                    self.i = (self.v[x as usize] * 5) as u16;
+                    let value: u16 = self.v[x as usize].into();
+                    self.i = value * 5;
                     self.pc += 2;
                 }
 
@@ -458,7 +467,7 @@ impl Cpu {
                 }
 
                 0x55 => {
-                    for register_index in 0..x {
+                    for register_index in 0..(x + 1) {
                         let memory_index = self.i + register_index;
 
                         self.memory[memory_index as usize] = self.v[register_index as usize];
@@ -467,7 +476,7 @@ impl Cpu {
                 }
 
                 0x65 => {
-                    for register_index in 0..x {
+                    for register_index in 0..(x + 1) {
                         let v_index = self.i + register_index;
 
                         self.v[register_index as usize] = self.memory[v_index as usize];
